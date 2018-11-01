@@ -192,10 +192,9 @@ int main(int argc,char **argv)
 	try {
 	string TheInputVideo;
 	string TheIntrinsicFile;
-	int camNo=1;
+	int camNo=0;
 	float TheMarkerSize=-1;
 	int ThePyrDownLevel=0;
-	VideoCapture vidcap;
 	vector<Marker> TheMarkers;
 	CameraParameters cam_param;
 	float minSize=0.02; // fraction of frame, minimum size of rectangle
@@ -204,9 +203,11 @@ int main(int argc,char **argv)
 
 	int wid=640, ht=480;
 	const char *dictionary="ARUCO_MIP_36h12";
+	cv::VideoCapture *cap=0;
 	for (int argi=1; argi<argc; argi++) {
 		if (0==strcmp(argv[argi],"--nogui")) showGUI=false;
-		else if (0==strcmp(argv[argi],"--cam")) camNo=atoi(argv[++argi]);
+		else if (0==strcmp(argv[argi],"--cam")) cap=new cv::VideoCapture(atoi(argv[++argi]));
+		else if (0==strcmp(argv[argi],"--file")) cap=new cv::VideoCapture(argv[++argi]);
 		else if (0==strcmp(argv[argi],"--dict")) dictionary=argv[++argi];
 		else if (0==strcmp(argv[argi],"--refine")) useRefine=true;
 		else if (0==strcmp(argv[argi],"--sz")) sscanf(argv[++argi],"%dx%d",&wid,&ht);
@@ -214,15 +215,14 @@ int main(int argc,char **argv)
 		else if (0==strcmp(argv[argi],"--min")) sscanf(argv[++argi],"%f",&minSize);
 		else printf("Unrecognized argument %s\n",argv[argi]);
 	}
-
-	//read from camera
-	vidcap.open(camNo);
+	// Initialize capturing live feed from the camera
+	if (!cap) cap=new cv::VideoCapture(0);
 	
-	vidcap.set(CV_CAP_PROP_FRAME_WIDTH, wid);
-	vidcap.set(CV_CAP_PROP_FRAME_HEIGHT, ht);
+	if (wid) cap->set(CV_CAP_PROP_FRAME_WIDTH, wid);
+	if (ht)  cap->set(CV_CAP_PROP_FRAME_HEIGHT, ht);
 
 	//check video is open
-	if (!vidcap.isOpened()) {
+	if (!cap->isOpened()) {
 		cerr<<"Could not open video"<<endl;
 		return -1;
 	}
@@ -230,7 +230,7 @@ int main(int argc,char **argv)
 	TheIntrinsicFile="camera.yml";
 
 	//read first image to get the dimensions
-	vidcap>>TheInputImage;
+	(*cap)>>TheInputImage;
 
 	//read camera parameters if passed
 	if (TheIntrinsicFile!="") {
@@ -259,8 +259,8 @@ int main(int argc,char **argv)
 	pair<double,double> AvrgTime(0,0) ;//determines the average time required for detection
 
 	//capture until press ESC or until the end of the video
-	while (vidcap.grab()) {
-		if (!vidcap.retrieve( TheInputImage) || !vidcap.isOpened()) {
+	while (cap->grab()) {
+		if (!cap->retrieve( TheInputImage) || !cap->isOpened()) {
 			std::cout<<"ERROR!  Camera "<<camNo<<" no longer connected!\n";
 			std::cerr<<"ERROR!  Camera "<<camNo<<" no longer connected!\n";
 			exit(1);
