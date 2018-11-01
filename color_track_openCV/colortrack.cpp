@@ -51,7 +51,7 @@ public:
 	float area; // pixels hit by center of mass
 	
 	// Look for this HSV color in this image.
-	void match(const cv::Mat &imgHSV,const cv::Vec3b &target);
+	bool match(const cv::Mat &imgHSV,const cv::Vec3b &target);
 public:
 	/* Set our position from the center of mass of this image. */
 	void calcMoments(const cv::Mat &img) {
@@ -63,7 +63,7 @@ public:
 	}
 };
 	
-void color_matcher::match(const cv::Mat &imgHSV,const cv::Vec3b &target)
+bool color_matcher::match(const cv::Mat &imgHSV,const cv::Vec3b &target)
 {
 	// Find matching pixels (color in range)
 	// Order here is: Hue, Saturation, Value
@@ -83,14 +83,20 @@ void color_matcher::match(const cv::Mat &imgHSV,const cv::Vec3b &target)
 		roi&=cv::Rect(cv::Point(0,0),threshed.size()); // trim to thresh's rectangle
 		calcMoments(threshed(roi)); // recompute moments
 		posX+=roi.x; posY+=roi.y; // shift back to pixels
+		return true;
 	}
+	else return false;
 }
 
 int main(int argc,char *argv[])
 {
 	cv::VideoCapture *cap=0;
 	long framecount=0;
+	long frameskip=1; // draw GUI every this often
 	double time_start=-1.0;
+	
+	// bright pink (in HSV)
+	int target_H=170, target_S=180, target_V=200;
 	
 	int argi=1; // command line argument index
 	while (argc>=argi+2) { /* keyword-value pairs */
@@ -98,6 +104,10 @@ int main(int argc,char *argv[])
 		char *value=argv[argi++];
 		if (0==strcmp(key,"--cam")) cap=new cv::VideoCapture(atoi(value));
 		else if (0==strcmp(key,"--file")) cap=new cv::VideoCapture(value);
+		else if (0==strcmp(key,"--skip")) frameskip=atol(value);
+		else if (0==strcmp(key,"--hue")) target_H=atol(value);
+		else if (0==strcmp(key,"--saturation")) target_S=atol(value);
+		else if (0==strcmp(key,"--value")) target_V=atol(value);
 		else printf("Unrecognized command line argument '%s'!\n",key);
 	}
 	// Initialize capturing live feed from the camera
@@ -126,12 +136,11 @@ int main(int argc,char *argv[])
 	cv::Mat frame, frameHSV;
 	
 	// Image color matching:
-	enum {nMatchers=2};
+	enum {nMatchers=1};
 	color_matcher matchers[nMatchers];
 	
 	cv::Vec3b targets[nMatchers];
-	targets[0]=cv::Vec3b(170,200,200); // bright pink (in HSV)
-	targets[1]=cv::Vec3b(70,200,200); // bright green
+	targets[0]=cv::Vec3b(target_H,target_S,target_V); 
 
 	// An infinite loop
 	while(true)
@@ -146,7 +155,7 @@ int main(int argc,char *argv[])
 		if (time_start<0) time_start=time_in_seconds();
 		
 		if (scribble.empty())
-			scribble = cv::Mat::zeros(frame.size(),CV_8UC3);
+			scribble = cv::Mat::zeros(frame.size(),CV_8U);
 
 		// Convert to HSV (for more reliable color matching)
 		cv::cvtColor(frame, frameHSV, CV_BGR2HSV);
@@ -169,47 +178,41 @@ int main(int argc,char *argv[])
 			matchers[m].match(frameHSV,targets[m]);
 		
 		// We want to draw a line only if its a valid position
-		if  (matchers[0].area>min_pixels*min_pixels
-		  && matchers[1].area>min_pixels*min_pixels)
+		if  (matchers[0].area>min_pixels*min_pixels)
 		{
 			// Print the current robot position
-			printf("position	%.2f	%.2f	%.0f	%.2f	%.2f	%.0f	%.3f	xya0 xya1 t\n", 
+			printf("position	%.2f	%.2f	%.0f	%.3f	xya t\n", 
 				matchers[0].posX, matchers[0].posY, matchers[0].area,
-				matchers[1].posX, matchers[1].posY, matchers[1].area,
 				time_in_seconds()-time_start);
 			fflush(stdout); // <- for "tee" or "tail"
 			
-			
-			// Draw a line between the two points
-			cv::line(scribble, 
-				cv::Point(matchers[0].posX, matchers[0].posY), 
-				cv::Point(matchers[1].posX, matchers[1].posY), 
-				cv::Scalar(255,128,128), 5);
+			// Draw crosshairs at the matched point
+			int crosshair=20;
+			for (int polarity=-1;polarity<=+1;polarity+=2)
+			  cv::line(scribble, 
+				  cv::Point(matchers[0].posX-crosshair, matchers[0].posY+polarity*crosshair), 
+				  cv::Point(matchers[0].posX+crosshair, matchers[0].posY-polarity*crosshair), 
+				  255, 3);
 		}
 
-		if ( ((framecount)%2)==0 ) {
-			// Pack thresholded images into color channels
-			std::vector<cv::Mat> channels;
-			channels.push_back(matchers[1].threshed); // blue channel (same as green)
-			channels.push_back(matchers[1].threshed); // green channel
-			channels.push_back(matchers[0].threshed); // red channel 
-			cv::Mat colorThresh;
-			cv::merge(channels,colorThresh); // threshold images packed into colors
-		
+		if ( ((framecount)%frameskip)==0 ) { // GUI update every other video frame
 			// Mix with video
-			frame=frame*0.5+scribble+colorThresh;
+      std::vector<cv::Mat> channels;
+      channels.push_back(scribble); // blue channel (same as green)
+      channels.push_back(scribble); // green channel
+      channels.push_back(matchers[0].threshed); // red channel 
+      cv::Mat colorThresh;
+      cv::merge(channels,colorThresh); // threshold images packed into colors
+
+			frame=frame*0.5+colorThresh;
 			cv::imshow("video", frame);
 		
 			// Slowly scale back old scribbles to zero
-			scribble=scribble*0.94-1.1;
-		
-			// Show thresholded images separately
-			//cv::imshow("thresh", matchers[1].threshed);
-			//cv::imshow("threshPink", matchers[0].threshed);
+			scribble=scribble*0.9-5;
 
 			// Wait for a keypress (for up to 1ms)
 			int c = cv::waitKey(1);
-			if(c!=-1)
+			if(c=='q')
 			{
 				// If any key is pressed, break out of the loop
 				break;

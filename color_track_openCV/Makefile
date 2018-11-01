@@ -1,6 +1,7 @@
 PROG=track
 OPTS=-O
-OPENCV=-I /usr/local/include/opencv -L /usr/local/lib -lopencv_core -lopencv_highgui -lopencv_features2d -lopencv_ts -lopencv_imgproc -lopencv_video -lm 
+OPENCV=`pkg-config opencv --cflags --libs`
+
 
 all: $(PROG)
 
