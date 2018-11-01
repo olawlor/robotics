@@ -201,7 +201,7 @@ int main(int argc,char **argv)
   int skipCount=1; // only process frames ==0 mod this
   int skipPhase=0;
 
-  int wid=640, ht=480;
+  int wid=0, ht=0;
   const char *dictionary="ARUCO_MIP_36h12";
   cv::VideoCapture *cap=0;
   for (int argi=1; argi<argc; argi++) {
