@@ -8,6 +8,8 @@
 */
 #include <librealsense2/rs.hpp>  
 #include <opencv2/opencv.hpp>  
+#include "vision/grid.hpp"
+#include "vision/grid.cpp"
 
   
 using namespace std;  
@@ -37,7 +39,7 @@ public:
     :angle(angle_degs*M_PI/180.0), c(cos(angle)), s(sin(angle)) 
   { }
   
-  inline void rotate(real_t &x,real_t &y) {
+  inline void rotate(real_t &x,real_t &y) const {
     real_t new_x = x*c - y*s;
     real_t new_y = x*s + y*c;
     x=new_x; y=new_y;
@@ -60,7 +62,7 @@ public:
   }
   
   // Project this camera-relative 3D point into world coordinates
-  vec3 world_from_camera(vec3 point) {
+  vec3 world_from_camera(vec3 point) const {
     real_t x=point.x, y=point.z, z=-point.y;
     camera_tilt.rotate(y,z); // tilt up, so camera is level
     Z_rotation.rotate(x,y); // rotate, to align with field
@@ -126,6 +128,23 @@ public:
 };
 
   
+/// Keeps track of location
+class obstacle_grid {
+public:
+  enum {GRIDSIZE=10}; // cm per grid cell
+  enum {GRIDX=(50+807+GRIDSIZE-1)/GRIDSIZE}; // xy grid cells for field
+  enum {GRIDY=(50+369+GRIDSIZE-1)/GRIDSIZE};
+  enum {GRIDTOTAL=GRIDX*GRIDY}; // total grid cells
+  
+  obstacle_grid() {
+    
+  }
+
+  // Detected obstacles (mostly for display as a GUI)
+  cv::Mat obstacles;
+};
+
+
 int main()  
 {  
     rs2::pipeline pipe;  
@@ -158,6 +177,7 @@ int main()
     int nextwrite=1;
 
     camera_transform camera_TF;
+    std::vector<grid_square> grid(obstacle_grid::GRIDTOTAL);
     
     rs2::frameset frames;  
     while (true)  
@@ -194,6 +214,8 @@ int main()
         
         Mat debug_image(Size(depth_w, depth_h), CV_8UC3, cv::Scalar(0));
         
+        for (size_t i=0;i<grid.size();i++) grid[i]=grid_square();
+        
         const int realsense_left_start=50; // invalid data left of here
         for (int y = 0; y < depth_h; y++)
         for (int x = realsense_left_start; x < depth_w; x++)
@@ -207,33 +229,56 @@ int main()
           
           if (depth>0) {
             vec3 cam = depth_to_3D.lookup(depth,x,y);
-            vec3 world = cam;
-            static coord_rotator rot(-90-20.0); // Camera tilt built into mount
-            rot.rotate(world.y,world.z);
-
-            static coord_rotator robot_rot(-30); // robot 2D rotation
-            robot_rot.rotate(world.x,world.y);
-            
-            // vec3 world = camera_TF.world_from_camera(cam);
+            vec3 world = camera_TF.world_from_camera(cam);
             
             if (world.y>0.0 && world.y<200.0) { // green Y stripe
               const cv::Vec3b green(0,255,0);
               debug_color=green;
-            }
-            
-            if (world.z>-120.0 && world.z<-80.0) { // blue Z stripe
-              const cv::Vec3b blue(255,0,0);
-              debug_color=blue;
             }
             if (world.x>0.0 && world.x<20.0) { // red X stripe
               const cv::Vec3b red(0,0,255);
               debug_color=red;
             }
             
+            if (world.z<5.0 && world.z>-30.0) { // blue Z stripe
+              const cv::Vec3b blue(255,0,0);
+              debug_color=blue;
+            }
+            
+            {
+              unsigned int x=world.x*(1.0/obstacle_grid::GRIDSIZE)+obstacle_grid::GRIDX/2;
+              unsigned int y=world.y*(1.0/obstacle_grid::GRIDSIZE);
+              if (x<obstacle_grid::GRIDX && y<obstacle_grid::GRIDY)
+              {
+                grid[y*obstacle_grid::GRIDX + x].addPoint(world.z);
+              }
+            }
+            
           }
           debug_image.at<cv::Vec3b>(y,x)=debug_color;
         }   
         imshow("Depth image",debug_image);
+        
+        enum {depthscale=8};
+        cv::Mat world_depth(cv::Size(obstacle_grid::GRIDX*depthscale,obstacle_grid::GRIDY*depthscale), CV_8UC3, cv::Scalar(0,0,0));
+        for (int h = 0; h < obstacle_grid::GRIDY; h++)
+        for (int w = 0; w < obstacle_grid::GRIDX; w++)
+        {
+          grid_square &g=grid[h*obstacle_grid::GRIDX + w];
+          for (int dy=0; dy<depthscale;dy++)
+          for (int dx=0; dx<depthscale;dx++)
+          {
+            int x=w*depthscale+dx;
+            int y=h*depthscale+dy;
+            if (g.getCount()>0) {
+              cv::Vec3b color(50+g.getMin(), 50+g.getMean(), 50+g.getMax());
+              
+              world_depth.at<cv::Vec3b>(y,x)=color;
+            }
+          }
+        }
+        imshow("2D World",world_depth);
+        
         
         int k = waitKey(10);  
         if (k == 27 || k=='q')  

@@ -13,3 +13,4 @@ color_track_openCV is an OpenCV program demonstrating simple color tracking.
 
 realsense_openCV projects Intel RealSense camera pixels into 3D.
 
+realsense_grid_openCV projects RealSense pixels into a 2D navigation grid.
