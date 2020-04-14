@@ -42,78 +42,8 @@ using namespace aruco;
 using namespace std;
 
 
-// Store info about how this marker is scaled, positioned and oriented
-struct marker_info_t {
-  int id; // marker's ID, from 0-1023 
-  float true_size; // side length, in meters, of black part of pattern
-  
-  float x_shift; // translation from origin, in meters, of center of pattern
-  float y_shift; 
-  float z_shift; 
-  
-  float rotate2D; // rotation around pattern's center, in degrees (0 for upright, 90 for rotated on side)
-  float rotate3D; // rotation about pattern's X axis, in degrees
-};
-
-const static marker_info_t marker_info[]={
-  {-1,0.5}, // fallback default case
-  
-/* Simple demo markers, scattered along X axis */
-  {0, 0.5, 1.0,0.0,0.0,   0,90 },
-  {1, 0.5, 7.0,0.0,0.0,   0,90 },
-  {2, 0.5, 10.0,0.0,0.0,  0,90 },
-};
-
-// Look up the calibration parameters for this marker
-const marker_info_t &get_marker_info(int id) {
-  for (int i=1;i<sizeof(marker_info)/sizeof(marker_info_t);i++) {
-    if (marker_info[i].id==id) 
-      return marker_info[i];
-  }
-  return marker_info[0];
-}
-
-
-
 bool showGUI=true, useRefine=false;
 Mat TheInputImage,TheInputImageCopy;
-
-
-/**
-  Convert 3D position to top-down 2D onscreen location
-*/
-cv::Point2f to_2D(const Marker &m,float x=0.0,int xAxis=2,int yAxis=0)
-{
-  // Extract 3x3 rotation matrix
-  Mat Rot(3,3,CV_32FC1);
-  Rodrigues(m.Rvec, Rot); // euler angles to rotation matrix
-
-  cv::Point2f ret;
-  const marker_info_t &mi=get_marker_info(m.id);
-  float scale=mi.true_size*70; // world meters to screen pixels
-  ret.x=scale*(m.Tvec.at<float>(xAxis,0)+x*Rot.at<float>(xAxis,xAxis));
-  ret.y=scale*(m.Tvec.at<float>(yAxis,0)+x*Rot.at<float>(yAxis,xAxis));
-  
-  printf("Screen point: %.2f, %.2f cm\n",ret.x,ret.y);
-  ret.y+=240; // approximately centered in Y
-  return ret;
-}
-
-/**
- Draw top-down image of reconstructed location of marker.
-*/
-void draw_marker_gui_2D(Mat &img,Scalar color,const Marker &m)
-{
-  int lineWidth=2;
-  
-  cv::line(img,
-    to_2D(m,-0.5),to_2D(m,0.0),
-    color,lineWidth,CV_AA);
-  cv::line(img,
-    to_2D(m,0.0),to_2D(m,+0.5),
-    Scalar(255,255,255)-color,lineWidth,CV_AA);
-}
-
 
 
 /* Extract location data from this valid, detected marker. 
@@ -121,8 +51,6 @@ void draw_marker_gui_2D(Mat &img,Scalar color,const Marker &m)
 */
 void extract_location(const Marker &marker)
 {
-  const marker_info_t &mi=get_marker_info(marker.id);
-
   // Extract 3x3 rotation matrix
   Mat Rot(3,3,CV_32FC1);
   Rodrigues(marker.Rvec, Rot); // euler angles to rotation matrix
@@ -139,49 +67,34 @@ void extract_location(const Marker &marker)
   full.at<float>(0,3)=marker.Tvec.at<float>(0,0);
   full.at<float>(1,3)=marker.Tvec.at<float>(1,0);
   full.at<float>(2,3)=marker.Tvec.at<float>(2,0);
-  
 
   // Final row is identity (nothing happening on W axis)
   full.at<float>(3,0)=0.0;
   full.at<float>(3,1)=0.0;
   full.at<float>(3,2)=0.0;
   full.at<float>(3,3)=1.0;
-  
-  if (mi.rotate2D==90) {
-    for (int i=0; i<3; i++) {
-      std::swap(full.at<float>(i,0),full.at<float>(i,2)); // swap X and Z
-      full.at<float>(i,0)*=-1; // invert (new) X
-    }
-  }
-  if (mi.rotate3D==90) {
-    for (int i=0; i<3; i++) {
-      std::swap(full.at<float>(i,1),full.at<float>(i,2)); // swap Y and Z
-      //full.at<float>(i,1)*=-1; // invert (new) Y
-      full.at<float>(i,0)*=-1; // invert (new) X
-    }
-  }
-
 
   // Invert, to convert marker-from-camera into camera-from-marker
   Mat back=full.inv();
 
-  if (false) {
+  if (true) {
     // Dump transform matrix to screen, for debugging
     for (int i=0; i<4; i++) {
       for (int j=0; j<4; j++)
-        printf("%.2f  ",back.at<float>(i,j));
+        printf("%5.2f  ",back.at<float>(i,j));
       printf("\n");
     }
   }
   
-  double scale=mi.true_size;
-  float x=back.at<float>(0,3)*scale+mi.x_shift;
-  float y=back.at<float>(1,3)*scale+mi.y_shift;
-  float z=back.at<float>(2,3)*scale+mi.z_shift;
-  float angle=180.0/M_PI*atan2(back.at<float>(1,0),-back.at<float>(0,0));
+  double scale=25; // size of marker in physical world units (cm)
+  double x_shift=0.0, y_shift=0.0, z_shift=0.0; // location of maker in world
+  float x=back.at<float>(0,3)*scale+x_shift;
+  float y=back.at<float>(1,3)*scale+y_shift;
+  float z=back.at<float>(2,3)*scale+z_shift;
+  float angle=180.0/M_PI*atan2(-back.at<float>(1,0),back.at<float>(0,0));
 
   // Print grep-friendly output
-  printf("Marker %d: Camera %.3f %.3f %.3f meters, heading %.1f degrees\n",
+  printf("Marker %d: Camera %.1f %.1f %.1f cm, heading %.1f degrees\n",
          marker.id, x,y,z,angle
         );
 }
@@ -202,7 +115,7 @@ int main(int argc,char **argv)
   int skipPhase=0;
 
   int wid=0, ht=0;
-  const char *dictionary="ARUCO_MIP_36h12";
+  const char *dictionary="TAG25h9";
   cv::VideoCapture *cap=0;
   for (int argi=1; argi<argc; argi++) {
     if (0==strcmp(argv[argi],"--nogui")) showGUI=false;
@@ -227,7 +140,7 @@ int main(int argc,char **argv)
     return -1;
   }
 
-  TheIntrinsicFile="camera.yml";
+  TheIntrinsicFile="camera.xml";
 
   //read first image to get the dimensions
   (*cap)>>TheInputImage;
