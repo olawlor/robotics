@@ -17,6 +17,8 @@ Dr. Orion Sky Lawlor, 2013-08-25 (Public Domain)
 #include <stdio.h>
 
 #include <opencv2/opencv.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/highgui/highgui_c.h>
 
 int tolH=10; // hue tolerance
 int tolS=100; // saturation tolerance
@@ -158,7 +160,7 @@ int main(int argc,char *argv[])
       scribble = cv::Mat::zeros(frame.size(),CV_8U);
 
     // Convert to HSV (for more reliable color matching)
-    cv::cvtColor(frame, frameHSV, CV_BGR2HSV);
+    cv::cvtColor(frame, frameHSV, cv::COLOR_BGR2HSV);
     
     // Dump the value at the mouse location
     if (mouse_x>=0 && mouse_x<frameHSV.cols &&

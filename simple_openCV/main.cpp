@@ -31,7 +31,7 @@ int main(int argc,char *argv[])
       break;
     
     // Grayscale
-    cv::cvtColor(frame,gray,CV_BGR2GRAY);
+    cv::cvtColor(frame,gray,cv::COLOR_BGR2GRAY);
     // Gradient estimate (with filtering)
     int ksize=3;
     cv::Sobel(gray,gradX,CV_32F, 1,0, ksize);

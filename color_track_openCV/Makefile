@@ -1,6 +1,6 @@
 PROG=track
 OPTS=-O
-OPENCV=`pkg-config opencv --cflags --libs`
+include ../Makefile.opencv
 
 
 all: $(PROG)

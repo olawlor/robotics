@@ -15,7 +15,7 @@ Servo esc; // hooked to 3-phase brushless fan motor
 void setup()
 {      
   // Initialize the Serial Bus for printing data.
-  Serial.begin(57600);
+  Serial.begin(115200);
   Serial.println("Connecting to MPU-9150...");
   esc.attach(2);
   esc.writeMicroseconds(1000);
@@ -29,9 +29,9 @@ void setup()
 }
 
 float p_gain=1.0; // proportional to angle error
-float d_gain=0.13; // derivative of angle (gyro rate)
-float i_gain=0.5; // integral of error
-float center_term=1230; // enough microseconds to cancel gravity
+float d_gain=0.15; // derivative of angle (gyro rate)
+float i_gain=0.1; // integral of error
+float center_term=1150; // enough microseconds to cancel gravity
 
 int run=0; // run on physical ('r' key) or virtual only (spacebar)
 long verbose=0, XYZdata=0;
@@ -49,8 +49,13 @@ void printgains() {
   Serial.println();
 }
 
+int thermostat=0;
 void user_interface(char c) {
-    if (c=='p') { // adjust p gain
+    if (c=='t') { // thermostat algorithm!
+      Serial.print("Thermostat mode enabled!\n");
+      thermostat=1;
+    }
+    else if (c=='p') { // adjust p gain
       p_gain=Serial.parseFloat();
       printgains();
     }
@@ -123,15 +128,21 @@ void loop()
   int rate=imu.G[0]+49; // gyro X axis == rate (plus drift fix)
   
   history+=err;
-  long wind=2000; // maximum "wind-up": limit history to avoid oscilations
+  long wind=4000; // maximum "wind-up": limit history to avoid oscilations
   if (history>wind) history=wind;
   if (history<-wind) history=-wind;
 
   // Sum PID terms and gains
-  int cmd=center_term-(0.01*p_gain)*err+d_gain*rate-(0.01*i_gain)*history;
+  int cmd=-(0.01*p_gain)*err+d_gain*rate-(0.01*i_gain)*history;
+  if (thermostat && err>-1000 && err<+1000) {
+    if (err<-200) cmd=+10; // pull up!
+    else if (err>+200) cmd=-10; // drop down
+    else cmd=0; // try to hover
+  }
+  cmd += center_term;
 
   // Limit resulting command
-  int cmd_min=1000, cmd_max=1500;
+  int cmd_min=1000, cmd_max=1300;
   if (cmd<cmd_min) cmd=cmd_min;
   if (cmd>cmd_max) cmd=cmd_max;
 
@@ -185,5 +196,3 @@ void loop()
   // Limit control rate to 100Hz (max)
   delay(10);
 }
-
-

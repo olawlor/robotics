@@ -86,7 +86,7 @@ void extract_location(const Marker &marker)
     }
   }
   
-  double scale=25; // size of marker in physical world units (cm)
+  double scale=14.5; // size of marker in physical world units (cm)
   double x_shift=0.0, y_shift=0.0, z_shift=0.0; // location of maker in world
   float x=back.at<float>(0,3)*scale+x_shift;
   float y=back.at<float>(1,3)*scale+y_shift;
@@ -131,8 +131,8 @@ int main(int argc,char **argv)
   // Initialize capturing live feed from the camera
   if (!cap) cap=new cv::VideoCapture(0);
   
-  if (wid) cap->set(CV_CAP_PROP_FRAME_WIDTH, wid);
-  if (ht)  cap->set(CV_CAP_PROP_FRAME_HEIGHT, ht);
+  if (wid) cap->set(cv::CAP_PROP_FRAME_WIDTH, wid);
+  if (ht)  cap->set(cv::CAP_PROP_FRAME_HEIGHT, ht);
 
   //check video is open
   if (!cap->isOpened()) {

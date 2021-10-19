@@ -202,6 +202,11 @@ int main(int argc,char *argv[])
     printf("Could not initialize capturing...\n");
     return -1;
   }
+  
+  // Set the webcam resolution:
+  cap->set(cv::CAP_PROP_FRAME_WIDTH, 1280);
+  cap->set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+  
 
   // Make the windows we'll be using
   cv::namedWindow("video");
@@ -239,7 +244,7 @@ int main(int argc,char *argv[])
     accum=cv::Mat::zeros(frame.rows,frame.cols,CV_16U);
     
     // Grayscale
-    cv::cvtColor(frame,gray,CV_BGR2GRAY);
+    cv::cvtColor(frame,gray,cv::COLOR_BGR2GRAY);
     // Gradient estimate (with filtering)
     int ksize=3;
     cv::Sobel(gray,gradX,CV_32F, 1,0, ksize);
@@ -314,7 +319,7 @@ int main(int argc,char *argv[])
             1.2*props.radius,
             cv::Scalar(65535),
             1,
-            CV_AA);
+            cv::LINE_AA);
         }
       }
     }

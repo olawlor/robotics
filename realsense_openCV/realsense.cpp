@@ -208,7 +208,7 @@ int main()
           if (depth>0) {
             vec3 cam = depth_to_3D.lookup(depth,x,y);
             vec3 world = cam;
-            static coord_rotator rot(-90-20.0); // Camera tilt built into mount
+            static coord_rotator rot(-90-0.0); // Camera tilt built into mount
             rot.rotate(world.y,world.z);
 
             static coord_rotator robot_rot(-30); // robot 2D rotation
@@ -216,7 +216,7 @@ int main()
             
             // vec3 world = camera_TF.world_from_camera(cam);
             
-            if (world.y>0.0 && world.y<200.0) { // green Y stripe
+            if (world.y>0.0 && world.y<2.0) { // green Y stripe
               const cv::Vec3b green(0,255,0);
               debug_color=green;
             }
