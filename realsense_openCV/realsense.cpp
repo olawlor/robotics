@@ -52,9 +52,9 @@ public:
   coord_rotator camera_tilt; // tilt down
   coord_rotator Z_rotation; // camera panning
   
-  camera_transform(real_t camera_Z_angle=0.0)
-    :camera(0.0,0.0,75.0),  // camera position
-     camera_tilt(-20), // X axis rotation (camera mounting tilt)
+  camera_transform(real_t camera_Z_angle=0.0,real_t camera_tilt_angle=-20.0,real_t camera_height=75)
+    :camera(0.0,0.0,camera_height),  // camera position
+     camera_tilt(camera_tilt_angle), // X axis rotation (camera mounting tilt)
      Z_rotation(camera_Z_angle) // Z axis rotation
   {
   }
@@ -158,6 +158,8 @@ int main()
     int nextwrite=1;
 
     camera_transform camera_TF;
+    int map_w=512,map_h=512;
+    Mat map(Size(map_w, map_h), CV_8UC3, cv::Scalar(0));
     
     rs2::frameset frames;  
     while (true)  
@@ -194,15 +196,36 @@ int main()
         
         Mat debug_image(Size(depth_w, depth_h), CV_8UC3, cv::Scalar(0));
         
+        camera_transform xform(20,-30,110);
+        
         const int realsense_left_start=50; // invalid data left of here
         for (int y = 0; y < depth_h; y++)
         for (int x = realsense_left_start; x < depth_w; x++)
         {
           int i=y*depth_w + x;
           float depth=depth_data[i]*depth2cm; // depth, in cm
-          
-          int depth_color=depth*(255.0/400.0);
           cv::Vec3b debug_color;
+          int depth_color=depth*(255.0/400.0);
+          
+          vec3 cam = depth_to_3D.lookup(depth,x,y);
+          vec3 world = xform.world_from_camera(cam);
+          debug_color=cv::Vec3b((int)(world.z/30.0*255),(int)(world.y/100.0*255),(int)(world.x/100.0*255));
+          
+          int obs=127;
+          if (world.z>10.0) obs=255;
+          
+          
+          debug_color[0]=obs;
+          int mx=world.x+map_w/2;
+          int my=map_h-world.y;
+          if (mx>=0 && mx<map_w && my>=0 && my<map_h)
+          {
+              cv::Vec3b old = map.at<cv::Vec3b>(my,mx);
+              if (old[0]<obs)
+                  map.at<cv::Vec3b>(my,mx)=cv::Vec3b(obs,obs,obs);
+          }
+          
+          /*
           if (depth_color<=255) debug_color=cv::Vec3b(depth_color,depth_color,0);
           
           if (depth>0) {
@@ -231,9 +254,11 @@ int main()
             }
             
           }
+          */
           debug_image.at<cv::Vec3b>(y,x)=debug_color;
         }   
         imshow("Depth image",debug_image);
+        imshow("Map",map);
         
         int k = waitKey(10);  
         if (k == 27 || k=='q')  
