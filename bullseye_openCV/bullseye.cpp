@@ -184,6 +184,7 @@ int main(int argc,char *argv[])
   cv::VideoCapture *cap=0;
   long framecount=0;
   double time_start=-1.0;
+  int lineLength=20;
   
   int argi=1; // command line argument index
   while (argc>=argi+2) { /* keyword-value pairs */
@@ -212,6 +213,7 @@ int main(int argc,char *argv[])
   cv::namedWindow("video");
   cv::createTrackbar("minimum gradient","video",&minDiff,255,NULL);
   cv::createTrackbar("output scale","video",&showScale,2000,NULL);
+  cv::createTrackbar("line length","video",&lineLength,100,NULL);
   cv::createTrackbar("search radius","video",&searchRadius,200,NULL);
 
   cv::Mat frame,gray,gradX,gradY;
@@ -261,7 +263,7 @@ int main(int argc,char *argv[])
       float mag=dx*dx+dy*dy;
       if (mag>minDiffSq) {
         mag=sqrt(mag); // now a length
-        float s=20.1/mag; // scale factor from gradient to line length
+        float s=lineLength/mag; // scale factor from gradient to line length
         accumulateLine(accum,
           cv::Point(x+dx*s,y+dy*s),
           cv::Point(x-dx*s,y-dy*s));
