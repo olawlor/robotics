@@ -9,7 +9,7 @@
  
 int main() 
 {
-    int markerID = 17;
+    int markerID = 0;
     int pixelSize = 800; 
     
     auto style = cv::aruco::DICT_APRILTAG_25h9;

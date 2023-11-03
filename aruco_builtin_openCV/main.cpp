@@ -77,6 +77,34 @@ int main(int argc,char *argv[])
                     <<"  origin "<<tvec[i]
                     <<"  rot "<<rvec[i]
                     <<std::endl;
+                
+                // Unpack the angles in rvec into a full 4x4 matrix
+                cv::Mat mat3x3(3,3,CV_64FC1); // rotation matrix
+                cv::Rodrigues(rvec[i],mat3x3);
+                std::cout<<"   mat3x3: "<<mat3x3<<std::endl;
+                
+                // Copy 3x3 out to 4x4 so we can invert the matrix
+                cv::Mat mat4x4(4,4,CV_64FC1); // translation matrix
+                for (int r=0;r<3;r++) for (int c=0;c<3;c++)
+                    mat4x4.at<double>(r,c) = mat3x3.at<double>(r,c);
+                            
+                // Copy translation vector
+                mat4x4.at<double>(0,3)=tvec[i][0];
+                mat4x4.at<double>(1,3)=tvec[i][1];
+                mat4x4.at<double>(2,3)=tvec[i][2];
+
+                // Final row is identity (nothing happening on W axis)
+                mat4x4.at<double>(3,0)=0.0;
+                mat4x4.at<double>(3,1)=0.0;
+                mat4x4.at<double>(3,2)=0.0;
+                mat4x4.at<double>(3,3)=1.0;
+                
+                // Invert this matrix to convert from 
+                //   "marker in camera coords" to "camera in marker coords"
+                cv::Mat back = mat4x4.inv();
+                         
+                std::cout<<"   back: "<<back<<std::endl;
+                
                 cv::drawFrameAxes(frame, cameraMatrix, distCoeff, rvec[i], tvec[i], 0.05);
             }
         }

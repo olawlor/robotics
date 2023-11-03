@@ -1,5 +1,5 @@
 PROG=track
-OPTS=-O
+OPTS=-O -Wall
 include ../Makefile.opencv
 ARUCO=-lopencv_aruco
 
