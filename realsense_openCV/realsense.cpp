@@ -52,7 +52,7 @@ public:
   coord_rotator camera_tilt; // tilt down
   coord_rotator Z_rotation; // camera panning
   
-  camera_transform(real_t camera_Z_angle=0.0,real_t camera_tilt_angle=-20.0,real_t camera_height=75)
+  camera_transform(real_t camera_Z_angle=0.0,real_t camera_tilt_angle=0.0,real_t camera_height=75)
     :camera(0.0,0.0,camera_height),  // camera position
      camera_tilt(camera_tilt_angle), // X axis rotation (camera mounting tilt)
      Z_rotation(camera_Z_angle) // Z axis rotation
@@ -61,7 +61,7 @@ public:
   
   // Project this camera-relative 3D point into world coordinates
   vec3 world_from_camera(vec3 point) {
-    real_t x=point.x, y=point.z, z=-point.y;
+    real_t x=point.x, y=point.z, z=-point.y; // fix horrible realsense y-down to true Z up
     camera_tilt.rotate(y,z); // tilt up, so camera is level
     Z_rotation.rotate(x,y); // rotate, to align with field
     x+=camera.x;
@@ -196,7 +196,9 @@ int main()
         
         Mat debug_image(Size(depth_w, depth_h), CV_8UC3, cv::Scalar(0));
         
-        camera_transform xform(20,-30,110);
+        map = 0.9*map;
+        
+        camera_transform xform(0, -15, 110);
         
         const int realsense_left_start=50; // invalid data left of here
         for (int y = 0; y < depth_h; y++)
@@ -209,13 +211,35 @@ int main()
           
           vec3 cam = depth_to_3D.lookup(depth,x,y);
           vec3 world = xform.world_from_camera(cam);
-          debug_color=cv::Vec3b((int)(world.z/30.0*255),(int)(world.y/100.0*255),(int)(world.x/100.0*255));
+          debug_color=cv::Vec3b((int)(world.z/100.0*255),(int)(world.y/100.0*255),(int)(world.x/100.0*255));
           
-          int obs=127;
-          if (world.z>10.0) obs=255;
+          if (cam.z>0) { // valid pixel
           
+              float max_dist=500.0;
+              
+              if (world.z > 150.0 || world.y > max_dist ) { // ceiling or far away
+                debug_color=cv::Vec3b(0,0,0); // black
+              }
+              else 
+              if (world.z > 15.0) { // obstacles are red
+                debug_color=cv::Vec3b(0,0,255); 
+                
+                int mx=world.x+map_w/2;
+                int my=map_h-world.y;
+                if (mx>=0 && mx<map_w && my>=0 && my<map_h)
+                {
+                    cv::Vec3b &m=map.at<cv::Vec3b>(my,mx);
+                    int n=m[2];
+                    n+=1;
+                    if (n<=255) m[2] = n;
+                    ///=cv::Vec3b(0,0,255);
+                }
+              }
+          }
           
-          debug_color[0]=obs;
+          /*
+          debug_color[0]=obs; // red obstacles
+          
           int mx=world.x+map_w/2;
           int my=map_h-world.y;
           if (mx>=0 && mx<map_w && my>=0 && my<map_h)
@@ -224,6 +248,7 @@ int main()
               if (old[0]<obs)
                   map.at<cv::Vec3b>(my,mx)=cv::Vec3b(obs,obs,obs);
           }
+          */
           
           /*
           if (depth_color<=255) debug_color=cv::Vec3b(depth_color,depth_color,0);
